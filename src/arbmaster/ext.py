@@ -35,11 +35,11 @@ class Bookmaker:
 
 class Odds:
     def __init__(self, bookmakers: List[Bookmaker]) -> None:
-        home = max([b.home_odds for b in bookmakers])
-        away = max([b.away_odds for b in bookmakers])
+        home = max([b.home_odds for b in bookmakers if b.home_odds is not None], default=None)
+        away = max([b.away_odds for b in bookmakers if b.away_odds is not None], default=None)
         draw = max([b.draw_odds for b in bookmakers if b.draw_odds is not None], default=None)
-        self.home = [bm.json(home) for bm in bookmakers if bm.home_odds == home]
-        self.away = [bm.json(away) for bm in bookmakers if bm.away_odds == away]
+        self.home = [bm.json(home) for bm in bookmakers if bm.home_odds == home] if home is not None else []
+        self.away = [bm.json(away) for bm in bookmakers if bm.away_odds == away] if away is not None else []
         self.draw = [bm.json(draw) for bm in bookmakers if bm.draw_odds == draw] if draw is not None else []
 
     @classmethod
