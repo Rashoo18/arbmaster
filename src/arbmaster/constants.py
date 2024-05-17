@@ -10,6 +10,8 @@ DEFAULT_BOOKMAKERS: "list[str]" = [
     "nordicbet", "pinnacle", "mrgreen", "casumo", "coolbet"
 ]
 
+DEFAULT_REQUESTS_REMAINING: int = 500
+
 LEAGUES: "list[dict[str, str]]" = [
   {
     "key": "basketball_euroleague",
