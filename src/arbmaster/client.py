@@ -11,16 +11,18 @@ from requests_cache import (
 
 from arbmaster.ext import Match
 from arbmaster.logger import logger
-from arbmaster.constants import DEFAULT_HEADERS, DEFAULT_BOOKMAKERS, LEAGUES
+from arbmaster.constants import (
+    DEFAULT_HEADERS, 
+    DEFAULT_BOOKMAKERS,
+    DEFAULT_REQUESTS_REMAINING,
+    LEAGUES
+)
 
 
 class Client:
     
     #: Odds api url
     url: str = "https://api.the-odds-api.com/v4/sports/{}/odds"
-    
-    #: Requests remaining for the api key
-    requests_remaining: int = 500
 
     #: Available leagues to fetch
     _leagues = LEAGUES
@@ -31,6 +33,7 @@ class Client:
                  params: Optional[Dict[str, str]] = None,
                  headers: Dict[str, str] = DEFAULT_HEADERS,
                  bookmakers: List[str] = DEFAULT_BOOKMAKERS,
+                 requests_remaining: int = DEFAULT_REQUESTS_REMAINING,
                  use_cache: Optional[bool] = None,
                  cache_name: Optional[StrOrPath] = DEFAULT_CACHE_NAME,
                  expire_after: Optional[Any] = -1,
@@ -45,6 +48,7 @@ class Client:
         
         self.headers = headers
         self.bookmakers = bookmakers
+        self.requests_remaining: int = requests_remaining
         
         if use_cache:
             self.session: CachedSession = CachedSession(cache_name=cache_name,
@@ -83,20 +87,22 @@ class Client:
         for k, v in kwargs.items():
             self.headers.update({k: v})
     
-    def parse_response(self, response: Response) -> Optional[List[Match]]:
+    def parse_response(self, response: Response, stake: float) -> Optional[List[Match]]:
         self.requests_remaining = int(response.headers.get("x-requests-remaining", 0))
         body: List[dict] = response.json()
         matches: List[Match] = []
         
         for match_data in body:
-            match: Match = Match(match_data)
+            match: Match = Match(match_data, stake=stake)
              
             if match.is_arbitrage:
                 matches.append(match)
         
         return matches if matches else None
     
-    def fetch_league(self, key: str, 
+    def fetch_league(self, 
+                     key: str,
+                     stake: float = 100,
                      timeout: Optional[float] = None) -> Optional[List[Match]]:
         if self.requests_remaining >= 2:
             url = self.url.format(key)
@@ -107,7 +113,7 @@ class Client:
             
             if resp.status_code == 200:
                 logger.info(f"Successfully fetched odds for league '{key}'.")
-                return self.parse_response(response=resp)
+                return self.parse_response(response=resp, stake=stake)
             elif resp.status_code == 429:
                 logger.error("Rate Limit exceeded. We recommend spacing out requests over several seconds.")
             elif resp.status_code == 401:
@@ -117,23 +123,28 @@ class Client:
         else:
             logger.error("There are no requests remaining. Change/update the API key")
 
-    def fetch_all(self, timeout: Optional[float] = None) -> List[Optional[List[Match]]]:
+    def fetch_all(self,
+                stake: float = 100,
+                leagues: Optional[List[Dict[str, str]]] = None,
+                timeout: Optional[float] = None) -> List[Optional[List[Match]]]:
         result = []
-        for league in LEAGUES:
-            resp = self.fetch_league(league['key'], timeout=timeout)
+        leagues_list = leagues or LEAGUES
+        for league in leagues_list:
+            resp = self.fetch_league(league['key'], stake, timeout=timeout)
             if resp is not None:
                 result.append(resp)
         return result
     
-    def fetch_sport(self, 
+    def fetch_sport(self,
                     sport: Literal["soccer", "basketball", "icehockey"],
+                    stake: float = 100,
                     timeout: Optional[float] = None
                     ) -> List[Optional[List[Match]]]:
         result = []
         for league in LEAGUES:
             league_sport = league['key'].split('_')[0]
             if league_sport == sport.lower():
-                resp = self.fetch_league(league["key"], timeout=timeout)
+                resp = self.fetch_league(league["key"], stake, timeout=timeout)
                 if resp is not None:
                     result.append(resp)
         return result
