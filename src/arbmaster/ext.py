@@ -15,12 +15,18 @@ class Bookmaker:
     draw_odds: Optional[float] = None
 
     @classmethod
-    def new(cls, bm_data: Dict[str, Any]) -> "Bookmaker":
+    def new(cls, hteam: str, bm_data: Dict[str, Any]) -> "Bookmaker":
         key: str = bm_data['key']
         title: str = bm_data['title']
         outcomes = bm_data['markets'][0]['outcomes']
-        home_odds: float = outcomes[0]['price']
-        away_odds: float = outcomes[1]['price']
+        
+        if hteam == outcomes[0]['name']:
+            home_odds: float = outcomes[0]['price']
+            away_odds: float = outcomes[1]['price']
+        else:
+            home_odds: float = outcomes[1]['price']
+            away_odds: float = outcomes[0]['price']
+        
         draw_odds: Optional[float] = None
         if len(outcomes) == 3:
             draw_odds = outcomes[2]['price']
@@ -38,6 +44,7 @@ class Odds:
         home = max([b.home_odds for b in bookmakers if b.home_odds is not None], default=None)
         away = max([b.away_odds for b in bookmakers if b.away_odds is not None], default=None)
         draw = max([b.draw_odds for b in bookmakers if b.draw_odds is not None], default=None)
+        
         self.home = [bm.json(home) for bm in bookmakers if bm.home_odds == home] if home is not None else []
         self.away = [bm.json(away) for bm in bookmakers if bm.away_odds == away] if away is not None else []
         self.draw = [bm.json(draw) for bm in bookmakers if bm.draw_odds == draw] if draw is not None else []
@@ -45,7 +52,7 @@ class Odds:
     @classmethod
     def new(cls, odds_data: Dict[str, Any]) -> "Odds":
         home = [Bookmaker(bm['key'], bm['title'], bm['price'], 0) for bm in odds_data['home_team']]
-        away = [Bookmaker(bm['key'], bm['title'], 0, bm['price']) for bm in odds_data['away_team']]
+        away = [Bookmaker(bm['key'], bm['title'], 0, bm['price'], 0) for bm in odds_data['away_team']]
         draw = [Bookmaker(bm['key'], bm['title'], 0, 0, bm['price']) for bm in odds_data['draw'] if len(odds_data['draw']) >= 1]
         bookmakers = home + away + draw
         return cls(bookmakers)
@@ -66,7 +73,7 @@ class Match:
         self.away_team: str = match_data['away_team']
         
         if match_data.get("bookmakers", None) is not None:
-            odds: Odds = Odds([Bookmaker.new(b) for b in match_data['bookmakers']])
+            odds: Odds = Odds([Bookmaker.new(self.home_team, b) for b in match_data['bookmakers']])
             commence_time: str = make_europe_time(match_data['commence_time'])
         elif match_data.get("odds", None) is not None:
             odds: Odds = Odds.new(match_data['odds'])
@@ -92,7 +99,7 @@ class Match:
             "commence_time": self.commence_time,
             "odds": self.odds.json() if isinstance(self.odds, Odds) else self.odds
         }
-
+    
 def make_europe_time(utc_str: str) -> str:
     utc_time = datetime.strptime(utc_str, "%Y-%m-%dT%H:%M:%SZ")
     start = datetime(utc_time.year, 3, 31, 2, 0)
